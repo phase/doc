@@ -1,0 +1,134 @@
+---------------------------------------------------------------------------
+Argh! and Aargh! Language Specification
+$Id: Argh-Spec.txt,v 1.10 2004/07/14 11:45:55 wilde Exp $
+
+Many thanks to Daniel Cristofani, 
+who did a great job revising and cleaning up this spec.
+---------------------------------------------------------------------------
+
+General
+
+Argh! provides a two-dimensional code/data array of 80x40 cells, and
+an infinite stack. Both the array cells and the stack can hold signed
+integer values. The range of the storeable values is implementation-
+dependent, but they are guaranteed to be at least signed 32-bit
+values. The stack is initially empty.
+
+A valid Argh! program consists of printable 7-bit ASCII characters,
+spaces, and linefeeds (no tabs!). On startup the code/data array is
+initialized with the Argh! program, without the linefeeds, starting at
+position 0,0 (the top left corner). The program must fit into the
+code/data array, so no line of the program may be longer than 80
+characters and the whole program must not be longer than 40 lines.
+The program may be smaller than the code/data array, in which case the
+values of the uninitialized cells are undefined.
+
+The instruction pointer starts at position 0,0 of the code/data
+array. The "execution direction" (direction of movement of the
+instruction pointer) may be any of "left", "down", "up", "right", and
+can be changed by flow control instructions. There is no default
+execution direction, so a valid Argh! program must start with a flow
+control instruction.
+
+When the cell at the instruction pointer is executed its value is
+evaluated as an Argh! instruction, and that instruction is performed;
+then the instruction pointer moves one cell in the execution
+direction.
+
+If Argh! tries to execute a cell which is not a valid Argh! instruction,
+or if program execution tries to leave the code/data array, Argh! will
+fail and print out its standard error message.
+
+Each Argh! instruction consists of one ascii character.
+This is the complete list of valid instructions:
+	    
+
+Flow Control:
+	
+h - set execution direction to "left"
+j - set execution direction to "down"
+k - set execution direction to "up"
+l - set execution direction to "right"
+
+H - jump (move instruction pointer) left to the next cell whose value 
+    matches the value on top of the stack, and set execution direction to 
+    "left"
+J - jump down to the next cell whose value matches the value on top 
+    of the stack, and set execution direction to "down"
+K - jump up to the next cell whose value matches the value on top of 
+    the stack, and set execution direction to "up"
+L - jump right to the next cell whose value matches the value on top 
+    of the stack, and set execution direction to "right"
+
+x - if the value on top of the stack is positive, turn the execution 
+    direction 90 degrees to the right
+X - if the value on top of the stack is negative, turn the execution 
+    direction 90 degrees to the left
+	    
+q - quit: end program execution
+	    
+
+Stack:
+
+s - store (push) value of the cell below the current cell to stack
+S - store (push) value of the cell above the current cell to stack
+
+d - duplicate top value on stack
+D - delete top value off stack
+
+a - add value of the cell below the current cell to the value on top
+    of the stack
+A - add value of the cell above the current cell to the value on top
+    of the stack
+
+r - reduce the value on top of the stack by the value of the cell below
+R - reduce the value on top of the stack by the value of the cell above
+
+f - fetch (pop) value from top of stack and store to cell below
+F - fetch (pop) value from top of stack and store to cell above
+
+
+I/O:
+
+p - send value below the current cell to stdout
+P - send value above the current cell to stdout
+
+g - get one byte from stdin and store in cell below
+G - get one byte from stdin and store in cell above
+
+e - insert value of system EOF in cell below
+E - insert value of system EOF in cell above
+
+
+Undocumented Instructions:
+
+# - behaves just like 'j', but only if its position in the code/data
+    array is 0,0 (the left/top corner) and only if there is a '!' in
+    the cell on its right side.
+
+    The '#' instruction was introduced to make Argh! programs executable
+    by puting "#!/path/to/argh" in the first line on systems which
+    know this kind of magic.
+
+    Anyway '#' is a valid, though undocumented, instruction and the
+    sha-bang (#!) line becomes part of the code/data array, so any
+    Argh!-implementation must understand '#'
+
+
+---------------------------------------------------------------------------
+Aargh! -- the extended Argh!
+
+Aargh! is similar to Argh! except that the height of the code/data
+array is unrestricted.  That means that the code/data array in Aargh!
+is still 80 cells wide, but it can consist of an arbitrary number of
+lines (not just 40 as in Argh!).
+
+This extension of Argh! has two main implications: 
+
+- Aargh! programs can be of any length; the code does not need to fit
+  into 40 lines.
+
+- Aargh! programs with self-modifying code can grow without limit in
+  the "down" direction.
+
+In contrast to Argh! Aargh! is believed to be Turing-complete.
