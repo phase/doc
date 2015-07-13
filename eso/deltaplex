@@ -1,0 +1,458 @@
+Deltaplex Programming Language
+==============================
+
+Version 1.0
+
+By Lode Vandevenne
+
+***Deltaplex***
+
+Deltaplex is a programming language that uses a PNG image as input. The RGBA colors of the pixels of the PNG image are the commands. It's got commands such as: draw a triangle, rotate the camera, read a texture (from the source code), ...
+
+The rest has to be figured out from the specification for now...
+
+There's a demo file, "code.png", included, which draws a rotating smiley. Only the top two rows of the image contain code. The rest is the smiley texture and a lot of comments. The code contains one loop.
+
+***Specification***
+
+A lot of this specification is OpenGL oriented, but nothing prohibits one from implementing an interpreter that uses another 3D API.
+Deltaplex supports only a very small subset of OpenGL commands, that are easily converted to calls of other APIs.
+
+Only PNG images are supported as source code. This to make sure that all interpreters know what image format to support. R, G, B and A channels of the PNG are all used.
+
+Though use of the A channel is limited on purpose, because most painting programs make it very annoying to edit it and it's already hard enough to edit single pixels. A painting program that displays the R, G and B values of the pixel your mouse hovers over, offers an advantage to edit Deltaplex code!
+
++++The Commands+++
+
+The commands are R, G, B tripels on the code image.
+The R channel selects the command or group of commands
+If the R channel specifies a group of commands, the G channel specifies the command or subgroup of commands
+If the G channel specifies a subgroup of commands, the B channel selects the command.
+Sometimes the G and/or B channel are used as data of this command. In that case they're denoted with a "D" in the notation below.
+If the R or R and G channel denote the command, and the G or G and B channel are unused and not used as data for this command, then the value of those channels should be "0" if nothing is indicated, or "don't care", denoted with "X".
+Sometimes the unused G and B channel have to be a certain value, which is then denoted below.
+The A-channel is unused for commands and always "don't care" on commands.
+The A-channel is used in textures, in colors, and in pixels of which the A-channel is read as data.
+
+Unexisting commands are treated as errors.
+
+Explanation of symbols in the command list:
+
+*) "G" and "B" represent data values read from the G and B channels as values in the range 0-255
+*) Values are pushed to the stack in order, popped (read) in inverse order. For example a 3-vector is pushed as x, y, z, popped as z, y, x
+*) Anything that is an integer, such as indexes, results of "==" and similar operations, ... are pushed to/popped from the integer stack.
+*) Anything that is floating point, such as matrices, results of floating point operations, ... are pushed to/popped from the floating point stack.
+
+After the commands, between [] is indicated how much values are pushed from the stack and popped from it. The meaning of the symbols:
+*) o: popped from floating point stack
+*) u: pushed to floating point stack
+*) c: value from floating point stack changed (c is same as ou, cc is same as oouu, ...)
+*) O: popped from integer stack
+*) U: pushed to integer stack
+*) C: value from integer stack changed (C is same as OU, CC is same as OOUU, ...)
+*) #*: multiply amount of pushes/pops/changes with #
+
+Commands that use the fore- and/or background color to draw something, might overwrite the current OpenGL color! (Currently this only applies to text drawing)
+
+So for example "r200gDbD" means that a pixel with the red channel to 200 is used as this command and the G and B channels of the pixel are data for this command. Something like "r50g100b150" means that a pixel with R = 50, G = 100, B = 150 is interpreted as this command.
+
+Finally, here the actual command list:
+
+//pushing numbers to the integer stack
+r200gDbD: push positive 16-bit integer: 256 * G + B [U]
+r201gDbD: add 16777216 * G + 65536 * B to the top of the integer stack [C]
+r202gDbD: push two 8-bit unsigned integers (first G then B) [UU]
+r204gDbD: push negative 16-bit integer: -256 * G - B [U]
+r205gDbD: subtract 16777216 * G + 65536 * B from the top of the integer stack [C]
+r206gDbD: push two signed 8-bit integers (first bit is sign, other 7 are the integers) [UU]
+
+//pushing numbers to the floating point stack
+r210gDbD: push 256 * G + B [u]
+r211gDbD: add 16777216 * G + 65536 * B [c]
+r212gDbD: add G / 256.0 + B / 65536.0 [c]
+r213gDbD: add G / 16777216.0 + B / 4294967296.0 [c]
+r214gDbD: push -256 * G - B [u]
+r215gDbD: subtract -16777216 * G - 65536 * B [c]
+r216gDbD: subtract -G / 256.0 - B / 65536.0 [c]
+r217gDbD: subtract -G / 16777216.0 - B / 4294967296.0 [c]
+r218gDbD: push G + B / 256.0 [u]
+r219gDbD: push -G - B / 256.0 [u]
+r220gDbD: push number from 0.0-1.0 (G / 256.0 + B / 65536.0) [u]
+
+//integer stack
+r20g0bD: del top B values [B*O]
+r20g1: del top N values [O N*O]
+r20g40bD: dup top B values [B*U]
+r20g41: dup top N values [O N*U]
+r21gDbD: swap top G values with second-topmost B values [(G+B)*C]
+r20g81: swap top N values with second-topmost M values [OO (N+M)*C]
+r20g120: mirror top B values [B*C]
+r20g121: mirror top N values [O N*C]
+r22g0: set integer pointer to N [O]
+r22g128: copy pointed-to value to top (= using the stack as regular memory) [U]
+r22g129: set pointed-to to top (= using the stack as regular memory) [O]
+
+//floating point stack
+r25g0bD: del top B values [b*o]
+r25g1: del top N values [O n*o]
+r25g40bD: dup top B values [b*u]
+r25g41: dup top N values [O n*u]
+r26gDbD: swap top G values with second-topmost B values [(g+b)*c]
+r25g81: swap top N values with second-topmost M values [OO (n+m)*c]
+r25g120: mirror top B values [n*c]
+r25g121: mirror top N values [O b*c]
+r27g0: set float pointer to N [O]
+r27g128: copy pointed-to value to top (= using the stack as regular memory) [u]
+r27g29: set pointed-to value to top (= using the stack as regular memory) [o]
+
+//swapping between int and float stack
+r28g0b128: move value from int stack to float stack [Ou]
+r28g1b128: move value from float stack to int stack [oU]
+r28g2b128: move N values from int stack to float stack [O N*O N*u]
+r28g3b128: move N values from float stack to int stack [O N*o N*U]
+
+//program flow
+r230g0b0: end (set IP direction to 0, 0) []
+r230g0b255: IP direction north []
+r230g1b0: IP direction east []
+r230g0b1: IP direction south []
+r230g255b0: IP direction west []
+r231g128: bounce IP on 45 degree \ wall []
+r231g129: bounce IP on 45 degree / wall []
+r232g0: goto N, M [OO]
+r232g1: relative goto N, M (means N and M are added to current instruction pointer position) [OO]
+r232g2: gosub N, M [OO]
+r232g3: relatuve gosub N, M [OO]
+r232g255: return (to position at last gosub or relative gosub) []
+r233g0: jump over []
+r233g1: jump over if (if value from int stack is not 0) [O]
+r233g2: jump over if not (if value from int stack is 0) [O]
+r234: sleep (wait until user presses key) []
+r0gXbX: dark NOP []
+r128gXbX: medium NOP []
+r255gXbX: bright NOP []
+
+//screen
+r40: set screen resulution to N, M, it'll also set OpenGL camera to 2D mode [OO]
+r41g0: redraw screen to make changes since last frame visible []
+r41g128: glClearColor (to background color) []
+r41g129: cls: glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ) []
+
+//2D graphics (NOTE: printing text or drawing a texture will GlEnable(GL_TEXTURE_2D))
+r50: go to 2D mode (ortho projection), this sets the GL_PROJECTION matrix [], xy coordinate 0,0 becomes top left of screen
+r51gDb0: draw current string at location x, y [OO]
+  --> g=0: with current OpenGL color, g=1: with two colors (foreground and background), this overwrites current OpenGL color that was set
+r51gDb1: draw integer at location x, y [O OO]
+  --> g=0: with current OpenGL color, g=1: with two colors (foreground and background), this overwrites current OpenGL color that was set
+r51gDb2: draw floating point number at location x, y [o OO]
+  --> g=0: with current OpenGL color, g=1: with two colors (foreground and background), this overwrites current OpenGL color that was set
+r52: draw texture at location x, y (= location of its top left corner)
+
+//3D graphics & OpenGL
+r60g0: go to 3D mode with current near and far, perspective projection, this sets the GL_PROJECTION matrix []
+r60g1: set near and far [oo]
+r61g0: glBegin(GL_POINTS) []
+r61g1: glBegin(GL_LINES) []
+r61g2: glBegin(GL_LINE_LOOP) []
+r61g3: glBegin(GL_LINE_STRIP) []
+r61g4: glBegin(GL_TRIANGLES) []
+r61g5: glBegin(GL_TRIANGLE_STRIP) []
+r61g6: glBegin(GL_TRIANGLE_FAN) []
+r61g7: glBegin(GL_QUADS) []
+r61g8: glBegin(GL_QUAD_STRIP) []
+r61g9: glBegin(GL_POLYGON) []
+r61g255: glEnd() []
+r62g0b0: glMatrixMode(GL_MODELVIEW) []
+r62g0b1: glMatrixMode(GL_PROJECTION) []
+r62g1: glLoadIdentity []
+r62g2: glLoadMatrixd [oooo oooo oooo oooo]
+r62g3: glMultMatrixd [oooo oooo oooo oooo]
+r62g40: glPushMatrix (max 32 levels, as the minimum in OpenGL) []
+r62g41: glPopMatrix []
+r62g200b0: glGetDoublev(GL_MODELVIEW_MATRIX) [uuuu uuuu uuuu uuuu]
+r62g200b1: glGetDoublev(GL_PROJECTION_MATRIX) [uuuu uuuu uuuu uuuu]
+r63g0b2: glVertex2d [oo]
+r63g0b3: glVertex3d [ooo]
+r63g64b2: glTexCoord2d [oo]
+r63g128b4: glColor4?, uses forground color: []
+r63g129b4: glColor4i: [OOOO]
+r63g130b4: glColor4d: [oooo]
+r64g0b0: glEnable(GL_TEXTURE_2D) []
+r64g0b1: glEnable(GL_DEPTH_TEST) []
+r64g1b0: glDisable(GL_TEXTURE_2D) []
+r64g1b1: glDisable(GL_DEPTH_TEST) []
+r65g0: glTranslate [3*o]
+r65g1: glRotate [3*o o]
+r65g2: glScale [o o o]
+
+//integer math
+r160g0: + [OOU]
+r160g1: - [OOU]
+r160g2: * [OOU]
+r160g3: / [OOU]
+r160g4: % [OOU]
+r160g40: == [OOU]
+r160g41: != [OOU]
+r160g42: > [OOU]
+r160g43: < [OOU]
+r160g44: >= [OOU]
+r160g45: <= [OOU]
+r160g80: & [OOU]
+r160g81: | [OOU]
+r160g82: ^ (xor) [OOU]
+r160g120: && [OOU]
+r160g121: || [OOU]
+r161g0: negate [C]
+r161g40: ~ [C]
+r161g41: ! [C]
+r161g80: ++ (increment) [C]
+r161g81: -- (decrement) [C]
+r161g120: abs [C]
+r161g200: square [C]
+
+//floating point math
+r170g0: + [oou]
+r170g1: - [oou]
+r170g2: * [oou]
+r170g3: / [oou]
+r170g40: == [ooU]
+r170g41: != [ooU]
+r170g42: > [ooU]
+r170g43: < [ooU]
+r170g44: >= [ooU]
+r170g45: <= [ooU]
+r170g160: pow [oou]
+r170g161: atan2 [oou]
+r171g0: negate [c]
+r171g1: reciproke (invert) [c]
+r171g80: ++ (increment) [c]
+r171g81: -- (decrement) [c]
+r171g120: abs [c]
+r171g121: floor [c]
+r171g122: ceil [c]
+r171g200: square [c]
+r171g201: sqrt [c]
+r171g202: ln [c]
+r171g203: exp [c]
+r171g255: multiply by 2pi (useful to use after entering an angle as value 0.0-1.0) [c]
+r172g0: sin [c]
+r172g1: cos [c]
+r172g2: tan [c]
+r172g6: asin [c]
+r172g7: acos [c]
+r172g8: atan [c]
+r173g0: push pi [u]
+r173g1: push 2pi [u]
+r173g2: push e [u]
+
+//matrix/vector math
+r175g0bD: negate length B vector [B*c]
+r175g1bD: + two length B vectors [B*(oo) B*u]
+r175g2bD: - two length B vectors [B*(oo) B*u]
+r175g3bD: * two length B vectors [B*(oo) B*u]
+r175g4bD: / two length B vectors [B*(oo) B*u]
+r175g5bD: == two length B vectors [B*(oo) U]
+r175g6bD: != two length B vectors [B*(oo) U]
+r175g40bD: multiply length B vector with scalar [o B*c]
+r176g0: negate length N vector [O N*c]
+r176g1: + two length N vectors [O N*(oo) N*u]
+r176g2: - two length N vectors [O N*(oo) N*u]
+r176g3: * two length N vectors [O N*(oo) N*u]
+r176g4: / two length N vectors [O N*(oo) N*u]
+r176g5: == two length N vectors [O N*(oo) U]
+r176g6: != two length N vectors [N*(oo) U]
+r176g40: multiply length N vector with scalar [O o N*c]
+r180g0b3: norm (length) of vector3 [3*o u]
+r180g1b3: square of norm of vector3 [3*o u]
+r181g0b3: dot product of two vector3's [3*o 3*o u]
+r181g1b3: cross product of two vector3's [3*o 3*o 3*u]
+r181g40b3: normalize vector [3*c]
+r182g0b3: invert 3x3 matrix [9*c]
+r182g0b4: invert 4x4 matrix [16*c]
+r182g1b3: determinant of 3x3 matrix [9*o u]
+r182g1b4: determinant of 4x4 matrix [16*o u]
+r182g40b3: multiply two 3x3 matrices [9*o 9*o 9*u]
+r182g40b4: multiply two 4x4 matrices [16*o 16*o 16*u]
+r182g80b3: multiply 3x3 matrix with vector3 [3*o 9*o 3*u]
+r182g80b4: multiply 4x4 matrix with vector4[4*o 16*o 4*u]
+r182g81b4: multiply 4x4 matrix with vector3[3*o 16*o 3*u]
+r183g0b3: push 3x3 0-matrix [9*u]
+r183g0b4: push 4x4 0-matrix [16*u]
+r183g1b3: push identity 3x3 matrix [9*u]
+r183g1b4: push identity 4x4 matrix [16*u]
+r183g40b3: push 0-vector3 [3*u]
+r183g41b3: push X-axis vector3 [3*u]
+r183g42b3: push Y-axis vector3 [3*u]
+r183g43b3: push Z-axis vector3 [3*u]
+r183g40b4: push 0-vector4 [4*u]
+r183g41b4: push X-axis vector4 [4*u]
+r183g42b4: push Y-axis vector4 [4*u]
+r183g43b4: push Z-axis vector4 [4*u]
+r184g3b4: convert vector3 to vector4 [u]
+r184g4b3: convert vector4 to vector3 [o ccc]
+
+//camera matrix transformations
+r190g0b4: get a 4x4 translation matrix [3*o 16*u]
+r190g1b4: get a 4x4 rotation matrix [3*o o 16*u]
+//(r190g128b4: make 4x4 lookAt matrix (given: pos, target, up) [3*o 3*o 3*o 16*u])
+r191g0b3: translate 3x3+3 camera [3*o 12*c]
+r191g1b3: rotate 3x3+3 camera around arbitrary axis [o 3*o 12*c]
+r191g128b3: make 3x3+3 camera look at given point from it's current position [3*o 12*c]
+r191g191b3: pitch camera [o 12*c]
+r191g192b3: yaw camera [o 12*c]
+r191g193b3: roll camera [o 12*c]
+r191g194b3: rotatex camera [o 12*c]
+r191g195b3: rotatey camera [o 12*c]
+r191g196b3: rotatez camera [o 12*c]
+r191g254b3: get unit 3x3+3 camera matrix [9*u 3*u]
+r191g255b3: set 3x3+3 camera as OpenGL matrix, it'll multiply the current OpenGL matrix with a 4x4 matrix containing the inverted 3x3 matrix and gl-translated over -pos [3*o 9*o]
+//more ideas: set/get u, v, dir, pos.  get/set zoom, fov. 4x4 ogl cam matrix to 3x3+3 cam
+
+//commands about getting/setting data from the pixel code
+r100g0: set memory pointer position to N, M [OO]
+r100g1: set memory pointer direction to N, M [OO]
+r100g100: set memory pointer position to instruction pointer position []
+r100g101: set memory pointer direction to instruction pointer direction []
+r101gDbD: set memory pointer position to G, B []
+r102gDbD: set memory pointer direction to G, B []
+r103g0: avance memory pointer forward []
+r103g255: avance memory pointer backward []
+r104g0: set pixel to signed int [O]
+r104g1: set pixel as signed int to int stack [U]
+r104g100: set pixel to float (encoded as 32-bit float in the pixel) [o]
+r104g101: set pixel as float to float stack [u]
+r105g0b0: set pixel R to int [O]
+r105g0b1: set pixel G to int [O]
+r105g0b2: set pixel B to int [O]
+r105g0b3: set pixel A to int [O]
+r105g1b0: get pixel R as int [U]
+r105g1b1: get pixel G as int [U]
+r105g1b2: get pixel B as int [U]
+r105g1b3: get pixel A as int [U]
+r106: increment GB each time you go over this []
+r107: if GB > 0, decrement GB else jump over next command []
+r108g0: get code width [U]
+r108g1: get code height [U]
+
+//mouse & keyboard
+r120g0: is left mouse button pressed? [U]
+r120g1: is right mouse button pressed? [U]
+r120g2: is scrollwheel scrolled down? [U]
+r120g3: is scrollwheel scrolled up? [U]
+r120g40: get mouseX [U]
+r120g41: get mouseY [U]
+r121g0bD: is key B pressed? (B is SDL code for keyboard from 0 to 255) [U]
+r121g1: is key N pressed? (N is popped from the integer stack) [OU]
+
+//color
+r130g0: read next pixel as foreground color (and don't execute it as command, so, jump over it) []
+r130g1: read next pixel as background color (and don't execute it as command, so, jump over it) []
+r131g0b0: integer stack to foreground color [OOOO]
+r131g1b0: integer stack to background color [OOOO]
+r131g0b1: floating point stack to foreground color [oooo]
+r131g1b1: floating point stack to background color [oooo]
+r132g0b0: foreground color to integer stack [UUUU]
+r132g1b0: background color to integer stack [UUUU]
+r132g0b1: foreground color to floating point stack [uuuu]
+r132g1b1: background color to floating point stack [uuuu]
+r133: swap fore and background color []
+
+//time
+r10g0: get ticks [U]
+r10g128: get ticks since previous time you called this command (initially 0) [U]
+r10g255: sleep for N milliseconds [O]
+r11g255: time anchor: wait until the time is more than anchor-time seconds since last time anchor []
+r12g0: set anchor time [O]
+r12g1: get anchor time [U]
+r13gXbX: sleep for 256 * G + B milliseconds
+
+//texture
+r240: select texture (there are 256 possible textures) [O]
+r241g0: create texture from pixels (give positions) [OOOO]
+r241g1: create texture from foreground color and size [OO]
+r241g128: bind this texture (let OpenGL use this one for drawing now) []
+r241g129: upload texture (has to be done before first time you use it, and after changes to make them visible) []
+r242g0: get pixel of texture as integer color [UUUU]
+r242g1: get pixel of texture as floating point color [uuuu]
+r242g2: get pixel of texture to foreground color []
+r242g3: get pixel of texture to background color []
+r242g128: set pixel of texture to integer color [OOOO]
+r242g129: set pixel of texture to floating point color [oooo]
+r242g130: set pixel of texture to foreground color []
+r242g140: set pixel of texture to background color []
+r243g0: get dimensions of current texture [UU]
+r244g0bD: set alpha (alpha channel of every pixel) to B []
+r244g1bD: apply color key: every pixel with foreground color (alpha of it ignored) is set to background color []
+r244g40: set alpha to brightness of each pixel []
+r244g41: set alpha to darkness of each pixel []
+r244g200: set RGB to foreground color (alpha of it ignored), while preserving the alpha channel
+r244g255: invert alpha []
+
+//text
+r140: select string (there are 256 possible strings) [O]
+r141g0: clear string
+r141g128bD: create string (at position of memory pointer, next letters in memory pointer direction) out of Bth color channel, null terminated, and append it[]
+r141g129bD: create string (at position of memory pointer, next letters in memory pointer direction) out of Bth color channel, with given length, and append it [O]
+r141g130: create string from integer, and append it
+r141g131: create string from floating point, and append it
+r142: get length of current string [U]
+
+End of command list.
+
++++Some more explanations and warnings+++
+
+Matrices are given in OpenGL order. With column vectors. That is:
+0  4  8  12
+1  5  9  13
+2  6  10 14
+3  7  11 15
+
+//initial values of vareous buffers
+*) the code pixels are initially the pixels of the loaded PNG image
+*) integer stack: empty
+*) intpointer: 0
+*) floating point stack: empty
+*) floatpointer: 0
+*) textures: all 256 empty 0x0 textures
+*) current texture is texture 0
+*) strings: all 256 empty length-0 strings
+*) current string is string 0
+*) foreground color: white
+*) background color: black
+*) glColor: white
+*) glClearColor: black
+*) OpenGL matrix stacks: 1 identity matrix
+*) instruction pointer: at position 0,0
+*) instruction pointer direction: east
+*) memory pointer: at position 0,0
+*) memory pointer direction: east
+*) anchor time: 0 milliseconds
+*) GL_DEPTH_TEST: disabled
+*) GL_TEXTURE_2D: disabled
+*) glMatrixMode: GL_MODELVIEW
+*) the gosub stack is empty
+*) near clipping plane: 0.1
+*) far clipping plane: 10000.0
+*) ticks of the "get ticks since previous time you called this" command: initially 0
+
+//limits (some could be relaxed in future versions)
+*) each code pixel has 8 bit R, 8 bit G, 8 bit B and 8 bit A
+*) the code image size has no set limit
+*) integers from integer stack are at least 32 bit
+*) floating point numbers from floating point stack are at least 64 bit
+*) there are 256 textures
+*) there are 256 strings
+*) the OpenGL glPushMatrix stack depth is 32
+*) the integer stack has no set limit
+*) the floating point stack has no set limit
+*) the gosub stack has no set limit (and contains dirx, diry, x and y per entry)
+
+Instruction Pointer and Memory Pointer, will wrap around the edge of the code image, meaning they'll jump from the right side to the left, the bottom side to the top, ...
+
+If the instruction pointer direction is 0, 0, then the screen will be redrawn every frame and a small delay will be in every frame to save CPU cycles. This is the "ended" status of the program.
+
+The escape key is reserved: it can be used by the interpreter, for example to show an interpreter menu or to quit.
+
+BEWARE: non-power of two textures are NOT drawn correctly in 3D mode. They are drawn correctly as 2D textures though.
+
+Copyright (c) 2006 by Lode Vandevenne. All rights reserved. 
